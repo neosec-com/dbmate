@@ -34,7 +34,7 @@ func NewDriver(config dbmate.DriverConfig) dbmate.Driver {
 		migrationsTableName: config.MigrationsTableName,
 		databaseURL:         config.DatabaseURL,
 		log:                 config.Log,
-		OnCluster:           config.OnCluster,
+		OnCluster:           config.OnClickhouseCluster,
 	}
 }
 
@@ -253,7 +253,7 @@ func (drv *Driver) CreateMigrationsTable(db *sql.DB) error {
 
 	engine := "engine = ReplacingMergeTree(ts)"
 	if drv.OnCluster {
-		engine = fmt.Sprintf("engine = ReplicatedReplacingMergeTree('/clickhouse/{installation}/{cluster}/tables/{table}', '{replica}, ts)")
+		engine = fmt.Sprintf("engine = ReplicatedReplacingMergeTree('/clickhouse/{installation}/{cluster}/tables/{table}', '{replica}', ts)")
 	}
 
 	_, err := db.Exec(fmt.Sprintf(`
