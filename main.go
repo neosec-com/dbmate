@@ -85,6 +85,12 @@ func NewApp() *cli.App {
 			Usage:   "timeout for --wait flag",
 			Value:   dbmate.DefaultWaitTimeout,
 		},
+		&cli.BoolFlag{
+			Name:    "on-cluster",
+			EnvVars: []string{"DBMATE_ON_CLUSTER"},
+			Usage:   "use cluster",
+			Value:   false,
+		},
 	}
 
 	app.Commands = []*cli.Command{
@@ -239,6 +245,7 @@ func action(f func(*dbmate.DB, *cli.Context) error) cli.ActionFunc {
 		if overrideTimeout != 0 {
 			db.WaitTimeout = overrideTimeout
 		}
+		db.OnCluster = c.Bool("on-cluster")
 
 		return f(db, c)
 	}

@@ -42,6 +42,7 @@ type DB struct {
 	WaitInterval        time.Duration
 	WaitTimeout         time.Duration
 	Log                 io.Writer
+	OnCluster           bool
 }
 
 // migrationFileRegexp pattern for valid migration files
@@ -65,6 +66,7 @@ func New(databaseURL *url.URL) *DB {
 		WaitInterval:        DefaultWaitInterval,
 		WaitTimeout:         DefaultWaitTimeout,
 		Log:                 os.Stdout,
+		OnCluster:           false,
 	}
 }
 
@@ -83,6 +85,7 @@ func (db *DB) GetDriver() (Driver, error) {
 		DatabaseURL:         db.DatabaseURL,
 		MigrationsTableName: db.MigrationsTableName,
 		Log:                 db.Log,
+		OnCluster:           db.OnCluster,
 	}
 
 	return driverFunc(config), nil

@@ -27,6 +27,7 @@ type DriverConfig struct {
 	DatabaseURL         *url.URL
 	MigrationsTableName string
 	Log                 io.Writer
+	OnCluster           bool
 }
 
 // DriverFunc represents a driver constructor
