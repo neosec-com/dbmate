@@ -1,3 +1,4 @@
+//go:build cgo
 // +build cgo
 
 package sqlite
@@ -45,6 +46,23 @@ func ConnectionString(u *url.URL) string {
 	// duplicate URL and remove scheme
 	newURL := *u
 	newURL.Scheme = ""
+
+	if newURL.Opaque == "" && newURL.Path != "" {
+		// When the DSN is in the form "scheme:/absolute/path" or
+		// "scheme://absolute/path" or "scheme:///absolute/path", url.Parse
+		// will consider the file path as :
+		// - "absolute" as the hostname
+		// - "path" (and the rest until "?") as the URL path.
+		// Instead, when the DSN is in the form "scheme:", the (relative) file
+		// path is stored in the "Opaque" field.
+		// See: https://pkg.go.dev/net/url#URL
+		//
+		// While Opaque is not escaped, the URL Path is. So, if .Path contains
+		// the file path, we need to un-escape it, and rebuild the full path.
+
+		newURL.Opaque = "//" + newURL.Host + dbutil.MustUnescapePath(newURL.Path)
+		newURL.Path = ""
+	}
 
 	// trim duplicate leading slashes
 	str := regexp.MustCompile("^//+").ReplaceAllString(newURL.String(), "/")
@@ -138,6 +156,20 @@ func (drv *Driver) DatabaseExists() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// MigrationsTableExists checks if the schema_migrations table exists
+func (drv *Driver) MigrationsTableExists(db *sql.DB) (bool, error) {
+	exists := false
+	err := db.QueryRow("SELECT 1 FROM sqlite_master "+
+		"WHERE type='table' AND name=$1",
+		drv.migrationsTableName).
+		Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+
+	return exists, err
 }
 
 // CreateMigrationsTable creates the schema migrations table

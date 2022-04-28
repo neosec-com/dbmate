@@ -41,7 +41,7 @@ For a comparison between dbmate and other popular database schema migration tool
 - Migrations are run atomically inside a transaction.
 - Supports creating and dropping databases (handy in development/test).
 - Supports saving a `schema.sql` file to easily diff schema changes in git.
-- Database connection URL is definied using an environment variable (`DATABASE_URL` by default), or specified on the command line.
+- Database connection URL is defined using an environment variable (`DATABASE_URL` by default), or specified on the command line.
 - Built-in support for reading environment variables from your `.env` file.
 - Easy to distribute, single self-contained binary.
 
@@ -62,6 +62,14 @@ Download the binary directly:
 ```sh
 $ sudo curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
 $ sudo chmod +x /usr/local/bin/dbmate
+```
+
+**Windows**
+
+Download using [scoop](https://scoop.sh)
+
+```pwsh
+scoop install dbmate
 ```
 
 **Docker**
