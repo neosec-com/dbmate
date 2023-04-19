@@ -73,8 +73,9 @@ func connectionString(initialURL *url.URL) string {
 		u.Path = fmt.Sprintf("/%s", query.Get("database"))
 		query.Del("database")
 	}
-
 	u.RawQuery = query.Encode()
+
+	u = ClearClusterParametersFromURL(u)
 
 	return u.String()
 }
