@@ -25,6 +25,7 @@ type Driver struct {
 	migrationsTableName string
 	databaseURL         *url.URL
 	log                 io.Writer
+	clusterParameters   *ClusterParameters
 }
 
 // NewDriver initializes the driver
@@ -33,6 +34,7 @@ func NewDriver(config dbmate.DriverConfig) dbmate.Driver {
 		migrationsTableName: config.MigrationsTableName,
 		databaseURL:         config.DatabaseURL,
 		log:                 config.Log,
+		clusterParameters:   ExtractClusterParametersFromURL(config.DatabaseURL),
 	}
 }
 
@@ -95,6 +97,14 @@ func (drv *Driver) openClickHouseDB() (*sql.DB, error) {
 	return sql.Open("clickhouse", clickhouseURL.String())
 }
 
+func (drv *Driver) onClusterClause() string {
+	clusterClause := ""
+	if drv.clusterParameters.OnCluster {
+		clusterClause = fmt.Sprintf(" ON CLUSTER '%s'", drv.clusterParameters.ClusterMacro)
+	}
+	return clusterClause
+}
+
 func (drv *Driver) databaseName() string {
 	name := strings.TrimLeft(dbutil.MustParseURL(connectionString(drv.databaseURL)).Path, "/")
 	if name == "" {
@@ -126,7 +136,9 @@ func (drv *Driver) CreateDatabase() error {
 	}
 	defer dbutil.MustClose(db)
 
-	_, err = db.Exec("create database " + drv.quoteIdentifier(name))
+	q := fmt.Sprintf("CREATE DATABASE %s%s", drv.quoteIdentifier(name), drv.onClusterClause())
+
+	_, err = db.Exec(q)
 
 	return err
 }
@@ -142,14 +154,16 @@ func (drv *Driver) DropDatabase() error {
 	}
 	defer dbutil.MustClose(db)
 
-	_, err = db.Exec("drop database if exists " + drv.quoteIdentifier(name))
+	q := fmt.Sprintf("DROP DATABASE IF EXISTS %s%s", drv.quoteIdentifier(name), drv.onClusterClause())
+
+	_, err = db.Exec(q)
 
 	return err
 }
 
 func (drv *Driver) schemaDump(db *sql.DB, buf *bytes.Buffer, databaseName string) error {
 	buf.WriteString("\n--\n-- Database schema\n--\n\n")
-	buf.WriteString("CREATE DATABASE IF NOT EXISTS " + drv.quoteIdentifier(databaseName) + ";\n\n")
+	buf.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s%s;\n\n", drv.quoteIdentifier(databaseName), drv.onClusterClause()))
 
 	tables, err := dbutil.QueryColumn(db, "show tables")
 	if err != nil {
@@ -250,15 +264,20 @@ func (drv *Driver) MigrationsTableExists(db *sql.DB) (bool, error) {
 
 // CreateMigrationsTable creates the schema migrations table
 func (drv *Driver) CreateMigrationsTable(db *sql.DB) error {
+	engineClause := "ReplacingMergeTree(ts)"
+	if drv.clusterParameters.OnCluster {
+		engineClause = fmt.Sprintf("ReplicatedReplacingMergeTree('%s', '%s', ts)", drv.clusterParameters.ZooPath, drv.clusterParameters.ReplicaMacro)
+	}
+
 	_, err := db.Exec(fmt.Sprintf(`
-		create table if not exists %s (
+		create table if not exists %s%s (
 			version String,
 			ts DateTime default now(),
 			applied UInt8 default 1
-		) engine = ReplacingMergeTree(ts)
+		) engine = %s
 		primary key version
 		order by version
-	`, drv.quotedMigrationsTableName()))
+	`, drv.quotedMigrationsTableName(), drv.onClusterClause(), engineClause))
 
 	return err
 }
