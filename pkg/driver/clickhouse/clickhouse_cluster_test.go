@@ -3,11 +3,10 @@ package clickhouse
 import (
 	"database/sql"
 	"fmt"
+	"github.com/amacneil/dbmate/v2/pkg/dbmate"
+	"github.com/amacneil/dbmate/v2/pkg/dbutil"
 	"os"
 	"testing"
-	"time"
-
-	"github.com/amacneil/dbmate/v2/pkg/dbutil"
 
 	"github.com/stretchr/testify/require"
 )
@@ -35,9 +34,17 @@ func assertDatabaseExists(t *testing.T, drv *Driver, shouldExist bool) {
 	}
 }
 
-// To make sure data insertion is synced on both nodes
-func waitForNodesToSync() {
-	time.Sleep(25 * time.Millisecond)
+// Makes sure driver creatinon is atomic
+func TestDriverCreationSanity(t *testing.T) {
+	url := fmt.Sprintf("%s?on_cluster", os.Getenv("CLICKHOUSE_CLUSTER_01_TEST_URL"))
+	u := dbutil.MustParseURL(url)
+	dbm := dbmate.New(u)
+	drv, err := dbm.Driver()
+	require.NoError(t, err)
+	drvAgain, err := dbm.Driver()
+	require.NoError(t, err)
+
+	require.Equal(t, drv, drvAgain)
 }
 
 func TestOnClusterClause(t *testing.T) {
@@ -118,6 +125,7 @@ func TestClickHouseDumpSchemaOnCluster(t *testing.T) {
 	schema, err := drv.DumpSchema(db)
 	require.NoError(t, err)
 	require.Contains(t, string(schema), "CREATE TABLE "+drv.databaseName()+".test_migrations")
+	require.Contains(t, string(schema), "ENGINE = ReplicatedReplacingMergeTree")
 	require.Contains(t, string(schema), "--\n"+
 		"-- Dbmate schema migrations\n"+
 		"--\n\n"+
@@ -227,8 +235,6 @@ func TestClickHouseSelectMigrationsOnCluster(t *testing.T) {
 	err = tx.Commit()
 	require.NoError(t, err)
 
-	waitForNodesToSync()
-
 	migrations01, err := drv01.SelectMigrations(db01, -1)
 	require.NoError(t, err)
 	require.Equal(t, true, migrations01["abc1"])
@@ -290,8 +296,6 @@ func TestClickHouseInsertMigrationOnCluster(t *testing.T) {
 	err = tx.Commit()
 	require.NoError(t, err)
 
-	waitForNodesToSync()
-
 	err = db01.QueryRow("select count(*) from test_migrations where version = 'abc1'").Scan(&count01)
 	require.NoError(t, err)
 	require.Equal(t, 1, count01)
@@ -333,8 +337,6 @@ func TestClickHouseDeleteMigrationOnCluster(t *testing.T) {
 	require.NoError(t, err)
 	err = tx.Commit()
 	require.NoError(t, err)
-
-	waitForNodesToSync()
 
 	count01 := 0
 	err = db01.QueryRow("select count(*) from test_migrations final where applied").Scan(&count01)
